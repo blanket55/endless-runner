@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Endless Runner 3D - Neon Void</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #000;
+            color: #0f0;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #0f0;
+            text-shadow: 0 0 10px #0f0;
+            z-index: 100;
+            font-family: 'Courier New', monospace;
+        }
+
+        #score {
+            margin-bottom: 10px;
+        }
+
+        #best {
+            opacity: 0.7;
+        }
+
+        #menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            transition: opacity 0.3s;
+        }
+
+        #menu.hidden {
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        #menu h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #0f0;
+            text-shadow: 0 0 20px #0f0;
+            font-family: 'Courier New', monospace;
+        }
+
+        #menu p {
+            font-size: 18px;
+            margin: 10px 0;
+            color: #00ff88;
+            text-shadow: 0 0 10px #00ff88;
+            font-family: 'Courier New', monospace;
+        }
+
+        #menu .controls {
+            margin-top: 40px;
+            text-align: center;
+        }
+
+        #menu .controls div {
+            margin: 8px 0;
+            font-size: 16px;
+            opacity: 0.8;
+        }
+
+        #gameOver {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        #gameOver.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #gameOver h2 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: #ff0055;
+            text-shadow: 0 0 20px #ff0055;
+            font-family: 'Courier New', monospace;
+        }
+
+        #finalScore {
+            font-size: 32px;
+            margin-bottom: 40px;
+            color: #0f0;
+            text-shadow: 0 0 15px #0f0;
+            font-family: 'Courier New', monospace;
+        }
+
+        #gameOver p {
+            font-size: 18px;
+            color: #00ff88;
+            text-shadow: 0 0 10px #00ff88;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            gap: 20px;
+            z-index: 100;
+        }
+
+        #controls.mobile {
+            display: flex;
+        }
+
+        .btn {
+            width: 60px;
+            height: 60px;
+            border: 2px solid #0f0;
+            background: rgba(0, 255, 0, 0.1);
+            color: #0f0;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 8px;
+            box-shadow: 0 0 10px #0f0;
+            transition: all 0.2s;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        .btn:active {
+            background: rgba(0, 255, 0, 0.3);
+            box-shadow: 0 0 20px #0f0;
+        }
+
+        @media (max-width: 768px) {
+            #menu h1 {
+                font-size: 36px;
+            }
+
+            #menu p {
+                font-size: 16px;
+            }
+
+            #hud {
+                top: 10px;
+                left: 10px;
+                font-size: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div id="score">SCORE: 0</div>
+        <div id="best">BEST: 0</div>
+    </div>
+
+    <div id="menu">
+        <h1>⚡ ENDLESS RUNNER 3D ⚡</h1>
+        <p>Navigate the neon void. Don't fall off!</p>
+        <div class="controls">
+            <div>← → or A/D to move</div>
+            <div>SPACE to start</div>
+        </div>
+    </div>
+
+    <div id="gameOver">
+        <h2>GAME OVER</h2>
+        <div id="finalScore">SCORE: 0</div>
+        <p>Press SPACE to restart</p>
+    </div>
+
+    <div id="controls">
+        <button class="btn" id="leftBtn">◀</button>
+        <button class="btn" id="rightBtn">▶</button>
+    </div>
+
+    <script>
+        // Game States
+        const GameState = {
+            MENU: 'menu',
+            PLAYING: 'playing',
+            GAME_OVER: 'gameOver'
+        };
+
+        // Segment Types
+        const SegmentType = {
+            STRAIGHT: 0,
+            NARROW: 1,
+            SLANT: 2,
+            TUNNEL: 3,
+            LEAP: 4
+        };
+
+        class NeonMaterialFactory {
+            static createPlatformMaterial() {
+                return new THREE.MeshStandardMaterial({
+                    color: 0x000000,
+                    emissive: 0x001100,
+                    metalness: 0.8,
+                    roughness: 0.2,
+                    envMapIntensity: 0.5
+                });
+            }
+
+            static createGlowMaterial() {
+                return new THREE.MeshStandardMaterial({
+                    color: 0x00ff88,
+                    emissive: 0x00ff88,
+                    metalness: 0.9,
+                    roughness: 0.1,
+                    toneMapped: false
+                });
+            }
+
+            static createHazardMaterial() {
+                return new THREE.MeshStandardMaterial({
+                    color: 0xff0055,
+                    emissive: 0xff0055,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+            }
+        }
+
+        class Player {
+            constructor(scene, world) {
+                this.scene = scene;
+                this.world = world;
+                this.steering = 0;
+                this.velocityMultiplier = 1;
+
+                // Physics body
+                const playerShape = new CANNON.Sphere(1.0);
+                this.body = new CANNON.Body({
+                    mass: 1.0,
+                    shape: playerShape,
+                    linearDamping: 0.3,
+                    angularDamping: 0.9
+                });
+                this.body.position.set(0, 5, 0);
+                world.addBody(this.body);
+
+                // Visual
+                const geometry = new THREE.SphereGeometry(1.0, 32, 32);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x00ffff,
+                    emissive: 0x00ffff,
+                    metalness: 0.9,
+                    roughness: 0.1,
+                    toneMapped: false
+                });
+                this.mesh = new THREE.Mesh(geometry, material);
+                scene.add(this.mesh);
+
+                this.baseSpeed = 50;
+            }
+
+            setSteering(value) {
+                this.steering = Math.max(-1, Math.min(1, value));
+            }
+
+            setVelocityMultiplier(multiplier) {
+                this.velocityMultiplier = multiplier;
+            }
+
+            update(deltaTime, world) {
+                const speed = this.baseSpeed * this.velocityMultiplier;
+
+                // Apply forward velocity
+                this.body.velocity.z = -speed;
+
+                // Apply steering
+                const steerForce = this.steering * 30;
+                this.body.velocity.x = Math.max(-20, Math.min(20, this.body.velocity.x + steerForce * deltaTime));
+
+                // Limit velocity
+                const maxSpeed = Math.sqrt(this.body.velocity.x ** 2 + this.body.velocity.z ** 2);
+                if (maxSpeed > 60) {
+                    this.body.velocity.x *= 60 / maxSpeed;
+                    this.body.velocity.z *= 60 / maxSpeed;
+                }
+
+                // Update mesh
+                this.mesh.position.copy(this.body.position);
+                this.mesh.quaternion.copy(this.body.quaternion);
+            }
+
+            reset(position) {
+                this.body.position.copy(position);
+                this.body.velocity.set(0, 0, 0);
+                this.body.angularVelocity.set(0, 0, 0);
+                this.steering = 0;
+                this.velocityMultiplier = 1;
+            }
+
+            getPosition() {
+                return this.body.position;
+            }
+        }
+
+        class Segment {
+            constructor(scene, world, position, type) {
+                this.scene = scene;
+                this.world = world;
+                this.position = position.clone();
+                this.type = type;
+                this.bodies = [];
+                this.meshes = [];
+
+                this.generate();
+            }
+
+            generate() {
+                const segmentLength = 10;
+                const baseWidth = 3.0;
+
+                switch (this.type) {
+                    case SegmentType.STRAIGHT:
+                        this.createStraight(baseWidth, segmentLength);
+                        break;
+                    case SegmentType.NARROW:
+                        this.createNarrow(baseWidth * 0.5, segmentLength);
+                        break;
+                    case SegmentType.SLANT:
+                        this.createSlant(baseWidth, segmentLength);
+                        break;
+                    case SegmentType.TUNNEL:
+                        this.createTunnel(baseWidth, segmentLength);
+                        break;
+                    case SegmentType.LEAP:
+                        this.createLeap(baseWidth, segmentLength);
+                        break;
+                }
+            }
+
+            createStraight(width, length) {
+                const geometry = new THREE.BoxGeometry(width, 1, length);
+                const material = NeonMaterialFactory.createPlatformMaterial();
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.copy(this.position);
+                mesh.position.y -= 0.5;
+                this.scene.add(mesh);
+                this.meshes.push(mesh);
+
+                const shape = new CANNON.Box(new CANNON.Vec3(width / 2, 0.5, length / 2));
+                const body = new CANNON.Body({ mass: 0, shape });
+                body.position.copy(this.position);
+                body.position.y -= 0.5;
+                this.world.addBody(body);
+                this.bodies.push(body);
+
+                // Glow edge
+                this.createGlowEdge(width, length);
+            }
+
+            createNarrow(width, length) {
+                this.createStraight(width, length);
+            }
+
+            createSlant(width, length) {
+                const geometry = new THREE.BoxGeometry(width, 1, length);
+                const material = NeonMaterialFactory.createPlatformMaterial();
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.copy(this.position);
+                mesh.position.y -= 0.5;
+                mesh.rotation.z = Math.PI / 12; // 15 degrees
+                this.scene.add(mesh);
+                this.meshes.push(mesh);
+
+                const shape = new CANNON.Box(new CANNON.Vec3(width / 2, 0.5, length / 2));
+                const body = new CANNON.Body({ mass: 0, shape });
+                body.position.copy(this.position);
+                body.position.y -= 0.5;
+                body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), Math.PI / 12);
+                this.world.addBody(body);
+                this.bodies.push(body);
+            }
+
+            createTunnel(width, length) {
+                const wallHeight = 8;
+                const wallThickness = 0.5;
+
+                // Floor
+                this.createStraight(width, length);
+
+                // Left wall
+                const leftGeometry = new THREE.BoxGeometry(wallThickness, wallHeight, length);
+                const material = NeonMaterialFactory.createHazardMaterial();
+                const leftMesh = new THREE.Mesh(leftGeometry, material);
+                leftMesh.position.copy(this.position);
+                leftMesh.position.x -= width / 2 + wallThickness / 2;
+                leftMesh.position.y += wallHeight / 2 - 0.5;
+                this.scene.add(leftMesh);
+                this.meshes.push(leftMesh);
+
+                // Right wall
+                const rightMesh = new THREE.Mesh(leftGeometry, material);
+                rightMesh.position.copy(this.position);
+                rightMesh.position.x += width / 2 + wallThickness / 2;
+                rightMesh.position.y += wallHeight / 2 - 0.5;
+                this.scene.add(rightMesh);
+                this.meshes.push(rightMesh);
+            }
+
+            createLeap(width, length) {
+                const gapSize = length / 2;
+                
+                // First platform
+                const geometry1 = new THREE.BoxGeometry(width, 1, gapSize);
+                const material = NeonMaterialFactory.createPlatformMaterial();
+                const mesh1 = new THREE.Mesh(geometry1, material);
+                mesh1.position.copy(this.position);
+                mesh1.position.y -= 0.5;
+                mesh1.position.z -= gapSize / 2;
+                this.scene.add(mesh1);
+                this.meshes.push(mesh1);
+
+                const shape1 = new CANNON.Box(new CANNON.Vec3(width / 2, 0.5, gapSize / 2));
+                const body1 = new CANNON.Body({ mass: 0, shape: shape1 });
+                body1.position.copy(mesh1.position);
+                this.world.addBody(body1);
+                this.bodies.push(body1);
+
+                // Second platform
+                const mesh2 = new THREE.Mesh(geometry1, material);
+                mesh2.position.copy(this.position);
+                mesh2.position.y -= 0.5;
+                mesh2.position.z += gapSize / 2;
+                this.scene.add(mesh2);
+                this.meshes.push(mesh2);
+
+                const body2 = new CANNON.Body({ mass: 0, shape: shape1 });
+                body2.position.copy(mesh2.position);
+                this.world.addBody(body2);
+                this.bodies.push(body2);
+            }
+
+            createGlowEdge(width, length) {
+                const edgeGeometry = new THREE.BoxGeometry(width, 0.1, length);
+                const material = NeonMaterialFactory.createGlowMaterial();
+                const mesh = new THREE.Mesh(edgeGeometry, material);
+                mesh.position.copy(this.position);
+                mesh.position.y += 0.55;
+                this.scene.add(mesh);
+                this.meshes.push(mesh);
+            }
+
+            cleanup() {
+                this.meshes.forEach(mesh => this.scene.remove(mesh));
+                this.bodies.forEach(body => this.world.removeBody(body));
+            }
+        }
+
+        class LevelGenerator {
+            constructor(scene, world) {
+                this.scene = scene;
+                this.world = world;
+                this.segments = [];
+                this.difficulty = 0;
+            }
+
+            generateSegment() {
+                const lastZ = this.segments.length > 0 ? this.segments[this.segments.length - 1].position.z : 0;
+                const newPosition = new THREE.Vector3(0, 2, lastZ - 10);
+
+                let type = SegmentType.STRAIGHT;
+                const rand = Math.random();
+
+                if (rand < 0.5) {
+                    type = SegmentType.STRAIGHT;
+                } else if (rand < 0.65) {
+                    type = SegmentType.NARROW;
+                } else if (rand < 0.75) {
+                    type = SegmentType.SLANT;
+                } else if (rand < 0.85) {
+                    type = SegmentType.TUNNEL;
+                } else {
+                    type = SegmentType.LEAP;
+                }
+
+                const segment = new Segment(this.scene, this.world, newPosition, type);
+                this.segments.push(segment);
+            }
+
+            updateDifficulty(distance) {
+                this.difficulty = Math.min(distance / 500, 10);
+            }
+
+            cleanup(playerZ) {
+                this.segments = this.segments.filter(seg => {
+                    if (seg.position.z > playerZ + 50) {
+                        seg.cleanup();
+                        return false;
+                    }
+                    return true;
+                });
+            }
+
+            reset() {
+                this.segments.forEach(seg => seg.cleanup());
+                this.segments = [];
+            }
+
+            getSegments() {
+                return this.segments;
+            }
+        }
+
+        class EndlessRunner {
+            constructor() {
+                // Scene setup
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x000000);
+                this.scene.fog = new THREE.Fog(0x000000, 500, 1000);
+
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+                this.camera.position.set(0, 3, 10);
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                document.body.appendChild(this.renderer.domElement);
+
+                // Physics
+                this.world = new CANNON.World();
+                this.world.gravity.set(0, -30, 0);
+                this.world.defaultContactMaterial.friction = 0.3;
+
+                // Game components
+                this.player = new Player(this.scene, this.world);
+                this.levelGenerator = new LevelGenerator(this.scene, this.world);
+
+                // State
+                this.gameState = GameState.MENU;
+                this.score = 0;
+                this.bestScore = parseInt(localStorage.getItem('bestScore') || '0');
+                this.distance = 0;
+                this.startTime = 0;
+                this.keys = {};
+
+                this.setupLighting();
+                this.setupEventListeners();
+                this.updateHUD();
+                this.gameLoop();
+            }
+
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(10, 20, 10);
+                this.scene.add(directionalLight);
+            }
+
+            setupEventListeners() {
+                window.addEventListener('keydown', (e) => {
+                    this.keys[e.key.toLowerCase()] = true;
+
+                    if (e.key === ' ') {
+                        e.preventDefault();
+                        if (this.gameState === GameState.MENU) {
+                            this.startGame();
+                        } else if (this.gameState === GameState.GAME_OVER) {
+                            this.restartGame();
+                        }
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    this.keys[e.key.toLowerCase()] = false;
+                });
+
+                // Mobile controls
+                const isMobile = window.innerWidth < 768;
+                if (isMobile) {
+                    document.getElementById('controls').classList.add('mobile');
+                    document.getElementById('leftBtn').addEventListener('touchstart', () => {
+                        this.keys['arrowleft'] = true;
+                    });
+                    document.getElementById('leftBtn').addEventListener('touchend', () => {
+                        this.keys['arrowleft'] = false;
+                    });
+                    document.getElementById('rightBtn').addEventListener('touchstart', () => {
+                        this.keys['arrowright'] = true;
+                    });
+                    document.getElementById('rightBtn').addEventListener('touchend', () => {
+                        this.keys['arrowright'] = false;
+                    });
+                }
+
+                window.addEventListener('resize', () => this.onWindowResize());
+            }
+
+            startGame() {
+                this.gameState = GameState.PLAYING;
+                this.score = 0;
+                this.distance = 0;
+                this.startTime = performance.now();
+                this.player.reset(new THREE.Vector3(0, 2, 0));
+                this.levelGenerator.reset();
+
+                document.getElementById('menu').classList.add('hidden');
+                document.getElementById('gameOver').classList.remove('show');
+
+                for (let i = 0; i < 10; i++) {
+                    this.levelGenerator.generateSegment();
+                }
+            }
+
+            restartGame() {
+                this.startGame();
+            }
+
+            gameLoop = () => {
+                requestAnimationFrame(this.gameLoop);
+
+                if (this.gameState === GameState.PLAYING) {
+                    this.updatePlayerInput();
+                    this.updateGame(1 / 60);
+                }
+
+                this.render();
+            };
+
+            updatePlayerInput() {
+                let steering = 0;
+                if (this.keys['arrowleft'] || this.keys['a']) steering = -1;
+                if (this.keys['arrowright'] || this.keys['d']) steering = 1;
+                this.player.setSteering(steering);
+            }
+
+            updateGame(deltaTime) {
+                this.world.step(1 / 60, deltaTime, 3);
+                this.player.update(deltaTime, this.world);
+
+                this.distance = -this.player.getPosition().z;
+                this.score = Math.floor(this.distance * 10);
+
+                const elapsedSeconds = (performance.now() - this.startTime) / 1000;
+                const velocityMultiplier = 1 + elapsedSeconds * 0.0005;
+                this.player.setVelocityMultiplier(velocityMultiplier);
+
+                while (this.levelGenerator.getSegments().length < 15) {
+                    this.levelGenerator.generateSegment();
+                }
+
+                this.levelGenerator.cleanup(this.player.getPosition().z);
+                this.updateCamera();
+
+                if (this.player.getPosition().y < -50) {
+                    this.endGame();
+                }
+
+                this.updateHUD();
+            }
+
+            updateCamera() {
+                const playerPos = this.player.getPosition();
+                const targetZ = playerPos.z + 10;
+                const targetY = playerPos.y + 3;
+
+                this.camera.position.lerp(new THREE.Vector3(0, targetY, targetZ), 0.1);
+                this.camera.lookAt(playerPos.x, playerPos.y + 1, playerPos.z - 5);
+            }
+
+            endGame() {
+                this.gameState = GameState.GAME_OVER;
+
+                if (this.score > this.bestScore) {
+                    this.bestScore = this.score;
+                    localStorage.setItem('bestScore', this.bestScore.toString());
+                }
+
+                document.getElementById('finalScore').textContent = `SCORE: ${this.score}`;
+                document.getElementById('gameOver').classList.add('show');
+            }
+
+            updateHUD() {
+                document.getElementById('score').textContent = `SCORE: ${this.score}`;
+                document.getElementById('best').textContent = `BEST: ${this.bestScore}`;
+            }
+
+            render() {
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        }
+
+        // Start game
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => new EndlessRunner());
+        } else {
+            new EndlessRunner();
+        }
+    </script>
+</body>
+</html>
